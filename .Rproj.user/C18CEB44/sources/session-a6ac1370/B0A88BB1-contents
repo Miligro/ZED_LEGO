@@ -1,0 +1,166 @@
+---
+title: "Analiza Zestawów LEGO"
+author: "Miłosz Grocholewski"
+date: "2023-12-04"
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE)
+```
+
+## Podsumowanie
+
+Celem analizy było zbadanie trendów w rozwoju zestawów LEGO na przestrzeni lat, zrozumienie zmian w popularności tematów oraz przewidywanie liczby klocków w zestawach na podstawie danych historycznych. Kluczowe wnioski z analizy są następujące:
+
+- **Trendy dotyczące liczby części:** Analiza wykazała stały wzrost średniej liczby klocków w zestawach LEGO począwszy od roku 1950 aż do dzisiaj. Można więc stwierdzić, że zestawy stały się bardziej złożone i bogate w elementy.
+- **Korelacje:** Została również zbadana korelacja między rokiem wydania zestawu a średnią liczbą klocków. Analiza wykazała silną korelację, co wskazuje na trend tworzenia bardziej zaawansowanych i wymagających zestawów z biegiem lat.
+- **Popularność tematów:** Na podstawie przeprowadzonej analizy można zauważyć że niektóre tematy, takie jak 'City' i 'Star Wars', pozostają popularne przez wiele lat, podczas gdy inne cieszą się zainteresowaniem jedynie w krótkich okresach.
+- **Przewidywanie liczby klocków:** Opracowany model predykcyjny, wykorzystujący metodę Random Forest, pozwolił na przewidywanie średniej liczby klocków w zestawach na podstawie roku, tematu oraz tematu głównego.
+
+Podsumowując można zauważyć ciągły rozwój LEGO, które zmierza w kierunku produkcji coraz bardziej złożonych zestawów, co może odpowiadać na ciągle rosnące oczekiwania i umiejętności klientów. Należy również zwrócić uwagę, że pewne tematy pozostają ponadczasowo popularne, co można wykorzystać do opierania przyszłych zestawów na sprawdzonych już motywach. Przeprowadzona analiza może być podstawą do dalszych badań nad optymalizacją strategii rozwoju produktów LEGO.
+
+
+## Kod wyliczający wykorzystane biblioteki.
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(caret)
+library(plotly)
+```
+
+## Kod zapewniający powtarzalność wyników przy każdym uruchomieniu raportu na tych samych danych.
+
+```{r}
+set.seed(23)
+```
+
+## Kod pozwalający wczytać dane z plików.
+
+```{r}
+sets <- read.csv("./Data/sets.csv")
+themes <- read.csv("./Data/themes.csv")
+
+minifigs <- read.csv("./Data/minifigs.csv")
+inventories <- read.csv("./Data/inventories.csv")
+inventory_minifigs <- read.csv("./Data/inventory_minifigs.csv")
+```
+
+## Kod przetwarzający brakujące dane.
+```{r}
+themes <- themes %>% 
+  mutate(parent_id = ifelse(is.na(parent_id), 0, parent_id))
+```
+
+## Podsumowanie rozmiaru zbioru + podstawowe statystyki
+```{r}
+sets_themes_minifigs_num <- sets %>%
+  left_join(inventories, by="set_num") %>%
+  left_join(inventory_minifigs, by = c("id" = "inventory_id")) %>%
+  group_by(set_num, theme_id, year, name, num_parts) %>%
+  summarise(figs_num = sum(quantity, na.rm = TRUE)) %>%
+  left_join(themes, by = c("theme_id" = "id"), suffix=c("_set", "_theme"))
+
+summary(sets_themes_minifigs_num)
+```
+
+## Szczegółowa analiza wartości atrybutów
+
+### Liczba części w zestawach 
+```{r}
+p <- ggplot(sets_themes_minifigs_num, aes(x=num_parts, num_parts_count=after_stat(count))) +
+  geom_histogram(bins=60) +
+  scale_y_continuous(trans='log1p') +
+  labs(title="Histogram liczby części w zestawach", x="Liczba części", y="Log(Liczba zestawów)")
+
+ggplotly(p, tooltip = c("num_parts_count", "x")) 
+```
+
+### Liczba figurek w zestawach
+```{r}
+p <- ggplot(sets_themes_minifigs_num, aes(x=figs_num, figs_num_count=after_stat(count))) +
+  geom_histogram(binwidth = 1) +
+  scale_y_continuous(trans='log1p') +
+  labs(title="Histogram liczby figurek w zestawach", x="Liczba figurek", y="Log(Liczba zestawów)")
+
+ggplotly(p, tooltip = c("figs_num_count", "x")) 
+```
+
+## Korelacje między zmiennymi
+
+```{r}
+ yearly_avg_num_parts <- sets %>%
+   filter(num_parts > 0) %>%
+   group_by(year) %>%
+   summarise(average_num_parts = mean(num_parts, na.rm = TRUE)) %>%
+   arrange(year)
+ 
+ correlation <- cor(yearly_avg_num_parts$year, yearly_avg_num_parts$average_num_parts)
+ 
+ ggplot(yearly_avg_num_parts, aes(x = year, y = average_num_parts)) +
+   geom_point() +
+   geom_smooth(method="lm") +
+   labs(title = "Średnia liczba klocków w zestawach LEGO na przestrzeni lat",
+     x = "Rok",
+     y = "Średnia liczba klocków (zestawy z co najmniej 1 klockiem)") +
+   annotate("text", x = min(yearly_avg_num_parts$year) + 20, y = max(yearly_avg_num_parts$average_num_parts), label = paste("Korelacja:", round(correlation, 2)))
+```
+
+## Najważniejsze trendy w rozwoju Lego na przestrzeni lat
+```{r, fig.width=10,  fig.height=20}
+ sets_themes_decade <- sets_themes_minifigs_num %>%
+   mutate(decade = floor(year / 10) * 10)
+
+ theme_popularity <- sets_themes_decade %>%
+   group_by(decade, name_theme) %>%
+   summarise(count = n()) %>%
+   arrange(decade, desc(count))
+
+ theme_popularity_top_ten <- theme_popularity %>%
+   group_by(decade) %>%
+   slice_max(order_by = count, n = 10)
+
+ ggplot(theme_popularity_top_ten, aes(x = reorder(name_theme, count), y = count, fill = as.factor(name_theme))) +
+  geom_col() +
+   facet_wrap(.~decade, scales = "free", ncol=2) +
+   labs(title = "10 najpopularniejszych tematów LEGO w każdej dekadzie",
+        x = "Temat",
+        y = "Liczba zestawów") +
+   scale_fill_viridis_d() +
+   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+         legend.position = "none")
+```
+
+
+## Przewidywanie liczby klocków
+### Model przewidujący liczbę klocków w danym roku dla zadanego tematu oraz tematu głównego (rodzica)
+```{r}
+sets_themes_grouped <- sets_themes_minifigs_num %>%
+  group_by(year, theme_id, parent_id) %>%
+  summarise(average_num_parts = mean(num_parts, na.rm=TRUE))
+
+in_training <- createDataPartition(y=sets_themes_grouped$average_num_parts, p=.8, list=FALSE)
+training = sets_themes_grouped[in_training,]
+testing = sets_themes_grouped[-in_training,]
+
+rfGrid <- expand.grid(mtry = 1:3)
+gridCtrl <- trainControl(
+    method = "repeatedcv",
+    number = 3,
+    repeats = 6,
+    search="grid")
+
+fitTune <- train(average_num_parts ~ .,
+             data = training,
+             method = "rf",
+             trControl = gridCtrl,
+             tuneGrid = rfGrid,
+             ntree = 30)
+
+predictions <- predict(fitTune, newdata=testing)
+postResample(predictions, testing$average_num_parts) %>% knitr::kable()
+```

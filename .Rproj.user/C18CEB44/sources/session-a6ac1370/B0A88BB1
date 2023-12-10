@@ -1,0 +1,33 @@
+{
+    "id": "B0A88BB1",
+    "path": "C:/Users/milo2/Documents/Studia/ZED/Projekt1/report.Rmd",
+    "project_path": "report.Rmd",
+    "type": "r_markdown",
+    "hash": "4126074335",
+    "contents": "",
+    "dirty": false,
+    "created": 1701711567137.0,
+    "source_on_save": false,
+    "relative_order": 2,
+    "properties": {
+        "tempName": "Untitled1",
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "22,466",
+        "scrollLine": "8",
+        "rmdVisualMode": "false",
+        "rmdVisualCollapsedChunks": "",
+        "rmdVisualModeLocation": "2268:1187",
+        "rmdVisualWrapConfigured": "true",
+        "docOutlineVisible": "1",
+        "last_setup_crc32": ""
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1702210963,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1702210963167,
+    "read_only": false,
+    "read_only_alternatives": []
+}
